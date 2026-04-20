@@ -1,7 +1,38 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+// In-memory store: ip -> { count, resetAt }
+const signupAttempts = new Map<string, { count: number; resetAt: number }>();
+const SIGNUP_LIMIT = 5;
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = signupAttempts.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    signupAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+
+  if (entry.count >= SIGNUP_LIMIT) return true;
+
+  entry.count++;
+  return false;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Rate limit signup POST requests
+  if (pathname === "/signup" && request.method === "POST") {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+    if (isRateLimited(ip)) {
+      return new NextResponse("Too many signup attempts. Try again later.", {
+        status: 429,
+      });
+    }
+  }
 
   // Demo mode: bypass auth entirely
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
