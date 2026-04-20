@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Copy, Check } from "lucide-react";
 import PostCard from "@/components/feed/PostCard";
 import PostForm from "@/components/feed/PostForm";
@@ -28,7 +28,6 @@ function buildReactionCounts(reactions: Reaction[], postId: string, userId: stri
     });
   }
 
-  // Ensure all 6 emojis are represented (with 0 count ones filtered on display)
   return EMOJIS.map((emoji) => ({
     emoji,
     count: emojiMap.get(emoji)?.count || 0,
@@ -68,6 +67,34 @@ export default function FeedClient({
       }
     }
   }, [group.id]);
+
+  // Real-time sync
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel(`feed:${group.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "posts", filter: `group_id=eq.${group.id}` },
+        async () => { await refreshPosts(); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "posts", filter: `group_id=eq.${group.id}` },
+        (payload) => {
+          setPosts((prev) => prev.filter((p) => p.id !== payload.old.id));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reactions" },
+        async () => { await refreshPosts(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [group.id, refreshPosts]);
 
   async function copyInviteCode() {
     await navigator.clipboard.writeText(group.invite_code);
