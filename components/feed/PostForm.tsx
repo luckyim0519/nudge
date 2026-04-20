@@ -18,11 +18,47 @@ export default function PostForm({ groupId, userId, onPosted }: PostFormProps) {
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function compressPhoto(file: File): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 1080;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) {
+            height = Math.round((height * MAX) / width);
+            width = MAX;
+          } else {
+            width = Math.round((width * MAX) / height);
+            height = MAX;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(
+          (blob) => resolve(new File([blob!], file.name, { type: "image/jpeg" })),
+          "image/jpeg",
+          0.8 // 80% quality
+        );
+      };
+      img.src = url;
+    });
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhoto(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    if (file.size > 20 * 1024 * 1024) {
+      alert("사진은 20MB 이하만 올릴 수 있어요");
+      return;
+    }
+    const compressed = await compressPhoto(file);
+    setPhoto(compressed);
+    setPhotoPreview(URL.createObjectURL(compressed));
   }
 
   async function handleSubmit(e: React.FormEvent) {
