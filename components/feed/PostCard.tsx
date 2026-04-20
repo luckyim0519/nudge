@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { Trash2 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { Post, ReactionCount, EMOJIS } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
@@ -11,13 +12,26 @@ interface PostCardProps {
   post: Post;
   currentUserId: string;
   reactionCounts: ReactionCount[];
+  onDelete?: (postId: string) => void;
 }
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-export default function PostCard({ post, currentUserId, reactionCounts: initialCounts }: PostCardProps) {
+export default function PostCard({ post, currentUserId, reactionCounts: initialCounts, onDelete }: PostCardProps) {
   const [counts, setCounts] = useState<ReactionCount[]>(initialCounts);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm("이 글을 삭제할까요?")) return;
+    setDeleting(true);
+    if (!DEMO_MODE) {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      await supabase.from("posts").delete().eq("id", post.id);
+    }
+    onDelete?.(post.id);
+  }
 
   async function toggleReaction(emoji: string) {
     const existing = counts.find((c) => c.emoji === emoji);
@@ -58,6 +72,15 @@ export default function PostCard({ post, currentUserId, reactionCounts: initialC
           <span className="text-sm font-semibold text-dark">{profile?.name}</span>
         </div>
         <span className="text-xs text-dark/30">{timeAgo}</span>
+        {post.user_id === currentUserId && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="w-7 h-7 flex items-center justify-center text-dark/20 hover:text-spark transition-colors disabled:opacity-30"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
 
       <p className="text-sm text-dark leading-relaxed mb-3">{post.content}</p>

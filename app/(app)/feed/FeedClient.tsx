@@ -115,6 +115,7 @@ export default function FeedClient({
               post={post}
               currentUserId={currentUserId}
               reactionCounts={buildReactionCounts(reactions, post.id, currentUserId)}
+              onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
             />
           ))
         )}
